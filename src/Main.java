@@ -1,4 +1,3 @@
-
 import javax.swing.JFrame;
 
 import edgeBundles.BundledEdgeRenderer;
@@ -33,7 +32,7 @@ public class Main {
     public static void main(String arg[]) {
         Graph graph = null;
         try {
-            graph = new GraphMLReader().readGraph("/relatii.xml");
+            graph = new GraphMLReader().readGraph("assets/relatii.xml");
         } catch (DataIOException e) {
             e.printStackTrace();
             System.err.println("Error loading graph.");
