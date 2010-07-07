@@ -1,4 +1,4 @@
-<project basedir="." default="compile" name="DeployViz">
+<project basedir="." default="compile" name="deployViz">
 	<property name="src.dir"     value="src"/>
     <property name="build.dir"   value="bin"/>
     <property name="classes.dir" value="${build.dir}/classes"/>

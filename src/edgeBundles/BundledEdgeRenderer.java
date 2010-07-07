@@ -20,16 +20,29 @@ import prefuse.visual.VisualItem;
 public class BundledEdgeRenderer extends EdgeRenderer {
     public static final int BSPLINE = 100;
     private Tree tree;
+    private double bfactor;
+    private boolean removeSharedAncestor;
 
     public BundledEdgeRenderer(int edgeType, Tree tree) {
         super(edgeType);
         this.tree = tree;
+        bfactor = 1;
+        removeSharedAncestor = false;
+    }
+    
+    public void setBundlingFactor(double bundling){
+    	bfactor = bundling;
+    }
+    
+    public void setRemoveSharedAncestor(boolean removeSA){
+    	removeSharedAncestor = removeSA;
     }
 
     @Override
     public void render(Graphics2D g, VisualItem item) {
         if (m_edgeType == BSPLINE) {
-            computeControlPoints(false, 1, (EdgeItem) item);
+            BSplineEdgeItem edge = (BSplineEdgeItem) item;
+        	edge.computeControlPoints(removeSharedAncestor, bfactor, (EdgeItem) item, tree);
             drawCubicBSpline(g, (EdgeItem) item);
         } else {
             Shape shape = getShape(item);
@@ -99,7 +112,7 @@ public class BundledEdgeRenderer extends EdgeRenderer {
             break;
         case BSPLINE:
             // computeBSplineControlPoints(false, 1, edge);
-            // see if you can use a different type of curve here
+            // see if you can use a different type of curve here TODO
              getCurveControlPoints(edge, m_ctrlPoints, n1x, n1y, n2x, n2y);
              m_cubic.setCurve(n1x, n1y, m_ctrlPoints[0].getX(),
              m_ctrlPoints[0]
@@ -154,7 +167,7 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 
         Graphics2D g2d = (Graphics2D) g;
 
-        g2d.setColor(Color.gray);
+        g2d.setColor(new Color(0.5f, 0.5f, 0.5f, ((BSplineEdgeItem) item).getAlpha()));
         BasicStroke bs = new BasicStroke(1);
         g2d.setStroke(bs);
 
@@ -211,100 +224,6 @@ public class BundledEdgeRenderer extends EdgeRenderer {
                 previousY = y;
             }
         }
-    }
-
-    private void computeControlPoints(boolean removeSharedAncestor,
-            double bundling, EdgeItem edge) {
-        NodeItem source, target, parent1 = null, parent2 = null;
-
-        Point2D.Double temp;
-
-        ArrayList<Point2D.Double> p1 = new ArrayList<Point2D.Double>();
-        ArrayList<Point2D.Double> p2 = new ArrayList<Point2D.Double>();
-        ArrayList<Point2D.Double> p = new ArrayList<Point2D.Double>();
-
-        int d1, d2, i, N;
-        double ux, uy, dx, dy;
-
-        source = edge.getSourceItem();
-        target = edge.getTargetItem();
-
-        d1 = tree.getDepth(source.getRow());
-        parent1 = source;
-
-        d2 = tree.getDepth(target.getRow());
-        parent2 = target;
-
-        p1.add(new Point2D.Double(source.getX(), source.getY()));
-        p1.add(new Point2D.Double(source.getX(), source.getY()));
-        p1.add(new Point2D.Double(source.getX(), source.getY()));
-
-        p2.add(new Point2D.Double(target.getX(), target.getY()));
-        p2.add(new Point2D.Double(target.getX(), target.getY()));
-        p2.add(new Point2D.Double(target.getX(), target.getY()));
-
-        while (d1 > d2) {
-            parent1 = (NodeItem) tree.getParent(source);
-            d1--;
-            p1.add(new Point2D.Double(parent1.getX(), parent1.getY()));
-            source = parent1;
-        }
-
-        while (d2 > d1) {
-            parent2 = (NodeItem) tree.getParent(target);
-            d2--;
-            p2.add(new Point2D.Double(parent2.getX(), parent2.getY()));
-            target = parent2;
-        }
-
-        while (parent1 != parent2) {
-            parent1 = (NodeItem) tree.getParent(parent1);
-            parent2 = (NodeItem) tree.getParent(parent2);
-
-            p1.add(new Point2D.Double(parent1.getX(), parent1.getY()));
-            p2.add(new Point2D.Double(parent2.getX(), parent2.getY()));
-        }
-
-        d1 = p1.size();
-        d2 = p2.size();
-
-        if (d1 + d2 == 4 && d1 > 1 && d2 > 1) { // shared parent
-            p.add(p1.get(1));
-        } else {
-            int offset = removeSharedAncestor ? 1 : 0;
-            for (i = 0; i < p1.size() - offset; ++i) {
-                p.add(p1.get(i));
-            }
-            for (i = p2.size() - 1; --i >= 0;) {
-                p.add(p2.get(i));
-            }
-
-            double b = bundling, ib = 1 - bundling;
-            N = p.size();
-
-            if (b < 1) {
-                NodeItem o = edge.getSourceItem();
-                ux = o.getX();
-                uy = o.getY();
-
-                o = edge.getTargetItem();
-                dx = o.getX();
-                dy = o.getY();
-
-                dx = (dx - ux) / (N + 2);
-                dy = (dy - uy) / (N + 2);
-
-                for (i = 0; i < N; i++) {
-                    temp = p.get(i);
-                    temp.setLocation(
-                            b * temp.getX() + ib * (ux + (i + 2) * dx), b
-                                    * temp.getY() + ib * (uy + (i + 2) * dy));
-                    p.set(i, temp);
-                }
-            }
-        }
-
-        ((BSplineEdgeItem) edge).setControlPoints(p);
     }
     
     /**
