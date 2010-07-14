@@ -1,13 +1,17 @@
-import helpers.CustomControlListener;
 import helpers.VizUtils;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.util.ArrayList;
 import java.util.Iterator;
-
 import javax.swing.BoxLayout;
 import javax.swing.JCheckBox;
+import javax.swing.JColorChooser;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -49,15 +53,24 @@ public class Main {
 	public static final String NODES = "graph.nodes";
 	public static final String EDGES = "graph.edges";
 	public static final String AGGR = "aggregates";
-	
-	private static BundledEdgeRenderer edgeRenderer;
-	static JSlider slider;
-	static JCheckBox cbox;
+
+	private JFrame frame;
+	private BundledEdgeRenderer edgeRenderer;
+	private JSlider slider;
+	private JCheckBox cbox;
+	private JColorChooser chooser = null;
+	private JDialog colorDialog = null;
+	private JLabel currentLabel = null, labelStart = null, labelStop = null;
 
 	public Main() {
 	}
 
 	public static void main(String arg[]) {
+		Main visualization = new Main();
+		visualization.initGUI();
+	}
+
+	public void initGUI() {
 		Graph graph = null;
 		try {
 			graph = new GraphMLReader().readGraph("assets/das3.xml");
@@ -84,7 +97,7 @@ public class Main {
 
 		edgeRenderer = new BundledEdgeRenderer(
 		// Constants.EDGE_TYPE_CURVE, tree);
-				BundledEdgeRenderer.BSPLINE, tree);
+				VizUtils.BSPLINE_EDGE_TYPE, tree);
 
 		Renderer aggregateRenderer = new PolygonRenderer(
 				Constants.POLY_TYPE_CURVE);
@@ -142,11 +155,9 @@ public class Main {
 		display.addControlListener(new ZoomControl()); // zoom
 		display.setHighQuality(true);
 		display.setDamageRedraw(false);
-		CustomControlListener alphaController = new CustomControlListener(vis);
-		display.addControlListener(alphaController);
 
 		// create a new window to hold the visualization
-		JFrame frame = new JFrame("Edge bundles");
+		frame = new JFrame("Edge bundles");
 
 		// ensure application exits when window is closed
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -156,12 +167,12 @@ public class Main {
 		JPanel topPanel = new JPanel();
 		BoxLayout blayout = new BoxLayout(topPanel, BoxLayout.PAGE_AXIS);
 		topPanel.setLayout(blayout);
-		
+
 		JPanel panel = new JPanel();
 		panel.add(new JLabel("Remove shared ancestor"));
 		cbox = new JCheckBox();
 		cbox.addChangeListener(new ChangeListener() {
-			
+
 			@Override
 			public void stateChanged(ChangeEvent arg0) {
 				edgeRenderer.setRemoveSharedAncestor(cbox.isSelected());
@@ -169,22 +180,37 @@ public class Main {
 			}
 		});
 		panel.add(cbox);
-		topPanel.add(panel);
 		
-		panel = new JPanel();
 		panel.add(new JLabel("Change bundling factor"));
-		slider = new JSlider(0, 20, 20);
+		slider = new JSlider(0, 20,
+				(int) (20 * VizUtils.INITIAL_BUNDLING_FACTOR));
 		slider.addChangeListener(new ChangeListener() {
-			
+
 			@Override
 			public void stateChanged(ChangeEvent event) {
-				edgeRenderer.setBundlingFactor(slider.getValue()/ 20.0);
+				edgeRenderer.setBundlingFactor(slider.getValue() / 20.0);
 				vis.repaint();
 			}
 		});
 		panel.add(slider);
 		topPanel.add(panel);
-		
+
+		panel = new JPanel();
+		panel.add(new JLabel("Start color:"));
+		labelStart = new JLabel("      ");
+		labelStart.setBackground(Color.green);
+		labelStart.setOpaque(true);
+		labelStart.addMouseListener(new LabelMouseListener());
+		panel.add(labelStart);
+
+		panel.add(new JLabel("Stop color:"));
+		labelStop = new JLabel("      ");
+		labelStop.setBackground(Color.red);
+		labelStop.setOpaque(true);
+		labelStop.addMouseListener(new LabelMouseListener());
+		panel.add(labelStop);
+		topPanel.add(panel);
+
 		frame.add(topPanel, BorderLayout.NORTH);
 
 		frame.add(display, BorderLayout.CENTER);
@@ -194,21 +220,32 @@ public class Main {
 		vis.run("color"); // assign the colors
 		vis.run("treeLayout"); // start up the tree layout
 
-		updateEdges(alphaController);
+		updateEdges();
 	}
 
-	private static void updateEdges(CustomControlListener alphaController) {
+	private void showColorChooser(Color color) {
+		if (chooser == null && colorDialog == null) {
+			chooser = new JColorChooser();
+			colorDialog = JColorChooser.createDialog(frame, "Choose color",
+					true, chooser, new DialogActionlistener(), null);
+		}
+
+		chooser.setColor(color);
+		colorDialog.setVisible(true);
+	}
+
+	private void updateEdges() {
 		Iterator<EdgeItem> edgeIter = vis.visibleItems(EDGES);
 		BSplineEdgeItem edge;
 		while (edgeIter.hasNext()) {
 			edge = (BSplineEdgeItem) edgeIter.next();
 			edge.computeControlPoints(false, 1, edge, tree);
 		}
-		alphaController.computeAlphas();
+		VizUtils.computeAlphas(vis);
 		vis.repaint();
 	}
 
-	private static void assignNodeColours() {
+	private void assignNodeColours() {
 		NodeItem item, parent;
 
 		String nextColor;
@@ -246,6 +283,46 @@ public class Main {
 					item.setFillColor(ColorLib.hex("#00FFFF"));
 				}
 			}
+		}
+	}
+
+	private class LabelMouseListener implements MouseListener{
+
+		@Override
+		public void mouseClicked(MouseEvent event) {
+			currentLabel = (JLabel) event.getSource();
+			showColorChooser(Color.red);
+		}
+
+		@Override
+		public void mouseEntered(MouseEvent arg0) {
+		}
+
+		@Override
+		public void mouseExited(MouseEvent arg0) {
+		}
+
+		@Override
+		public void mousePressed(MouseEvent arg0) {
+		}
+
+		@Override
+		public void mouseReleased(MouseEvent arg0) {
+		}
+	}
+
+	private class DialogActionlistener implements ActionListener {
+
+		@Override
+		public void actionPerformed(ActionEvent arg0) {
+			Color newcolor = chooser.getColor();
+			currentLabel.setBackground(newcolor);
+			if(currentLabel == labelStart){
+				edgeRenderer.setStartColor(newcolor);
+			} else {
+				edgeRenderer.setStopColor(newcolor);
+			}
+			vis.repaint();
 		}
 	}
 }

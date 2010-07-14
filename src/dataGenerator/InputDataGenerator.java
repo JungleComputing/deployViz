@@ -144,7 +144,7 @@ public class InputDataGenerator {
 			for (j = i + 1; j < id; j++) {
 				x = Math.random();
 				if (x > 0.5) {
-					bw.write("<edge source=\"" + i + "\" target=\"" + j
+					bw.write("<edge source=\"" + j + "\" target=\"" + i
 							+ "\"></edge>\n");
 				}
 			}
