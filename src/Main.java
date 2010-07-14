@@ -2,19 +2,24 @@ import helpers.VizUtils;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
 import java.util.ArrayList;
 import java.util.Iterator;
+import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.ButtonGroup;
+import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JColorChooser;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
+import javax.swing.JSeparator;
 import javax.swing.JSlider;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -26,6 +31,7 @@ import prefuse.Display;
 import prefuse.Visualization;
 import prefuse.action.ActionList;
 import prefuse.action.assignment.ColorAction;
+import prefuse.action.layout.graph.NodeLinkTreeLayout;
 import prefuse.action.layout.graph.RadialTreeLayout;
 import prefuse.controls.DragControl;
 import prefuse.controls.PanControl;
@@ -54,13 +60,17 @@ public class Main {
 	public static final String EDGES = "graph.edges";
 	public static final String AGGR = "aggregates";
 
+	public static final String TREE_LAYOUT = "treeLayout";
+	public static final String RADIAL_TREE_LAYOUT = "radialTreeLayout";
+
 	private JFrame frame;
 	private BundledEdgeRenderer edgeRenderer;
 	private JSlider slider;
 	private JCheckBox cbox;
 	private JColorChooser chooser = null;
 	private JDialog colorDialog = null;
-	private JLabel currentLabel = null, labelStart = null, labelStop = null;
+	private JButton lastSelectedButton = null, buttonStart = null,
+			buttonStop = null;
 
 	public Main() {
 	}
@@ -138,14 +148,14 @@ public class Main {
 		// to
 		assignNodeColours();
 
-		// ActionList circleLayout = new ActionList();
-		// circleLayout.add(new CircleLayout("graph.nodes"));
-		// circleLayout.add(new RepaintAction());
-		// vis.putAction("layout", circleLayout);
+		// create the radial tree layout action
+		RadialTreeLayout radialTreeLayout = new RadialTreeLayout(GRAPH);
+		vis.putAction(RADIAL_TREE_LAYOUT, radialTreeLayout);
 
 		// create the tree layout action
-		RadialTreeLayout treeLayout = new RadialTreeLayout(GRAPH);
-		vis.putAction("treeLayout", treeLayout);
+		NodeLinkTreeLayout treeLayout = new NodeLinkTreeLayout(GRAPH,
+				Constants.ORIENT_TOP_BOTTOM, 200, 3, 20);
+		vis.putAction(TREE_LAYOUT, treeLayout);
 
 		// create a new Display that pull from our Visualization
 		Display display = new Display(vis);
@@ -165,11 +175,17 @@ public class Main {
 		frame.setLayout(lmanager);
 
 		JPanel topPanel = new JPanel();
-		BoxLayout blayout = new BoxLayout(topPanel, BoxLayout.PAGE_AXIS);
+		BoxLayout blayout = new BoxLayout(topPanel, BoxLayout.LINE_AXIS);
 		topPanel.setLayout(blayout);
+		topPanel.add(Box.createRigidArea(new Dimension(30, 30)));
 
-		JPanel panel = new JPanel();
-		panel.add(new JLabel("Remove shared ancestor"));
+		JPanel verticalpaJPanel = new JPanel();
+		BoxLayout verticalLayout = new BoxLayout(verticalpaJPanel,
+				BoxLayout.PAGE_AXIS);
+		verticalpaJPanel.setLayout(verticalLayout);
+
+		JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		panel.add(new JLabel("Remove shared ancestor:"));
 		cbox = new JCheckBox();
 		cbox.addChangeListener(new ChangeListener() {
 
@@ -180,8 +196,36 @@ public class Main {
 			}
 		});
 		panel.add(cbox);
-		
-		panel.add(new JLabel("Change bundling factor"));
+		verticalpaJPanel.add(panel);
+
+		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		panel.add(new JLabel("Start color:"));
+		buttonStart = new JButton("  ");
+		buttonStart.setBackground(VizUtils.DEFAULT_START_COLOR);
+		buttonStart.setFocusPainted(false);
+		buttonStart.addActionListener(new ButtonActionListener());
+		buttonStart.setToolTipText("Click to select color");
+		panel.add(buttonStart);
+
+		panel.add(new JLabel("Stop color:"));
+		buttonStop = new JButton("  ");
+		buttonStop.setBackground(VizUtils.DEFAULT_STOP_COLOR);
+		buttonStop.setFocusPainted(false);
+		buttonStop.addActionListener(new ButtonActionListener());
+		buttonStop.setToolTipText("Click to select color");
+		panel.add(buttonStop);
+
+		verticalpaJPanel.add(panel);
+		topPanel.add(verticalpaJPanel);
+
+		topPanel.add(new JSeparator(JSeparator.VERTICAL));
+
+		verticalpaJPanel = new JPanel();
+		verticalLayout = new BoxLayout(verticalpaJPanel, BoxLayout.PAGE_AXIS);
+		verticalpaJPanel.setLayout(verticalLayout);
+
+		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		panel.add(new JLabel("Change bundling factor:"));
 		slider = new JSlider(0, 20,
 				(int) (20 * VizUtils.INITIAL_BUNDLING_FACTOR));
 		slider.addChangeListener(new ChangeListener() {
@@ -193,32 +237,53 @@ public class Main {
 			}
 		});
 		panel.add(slider);
-		topPanel.add(panel);
 
-		panel = new JPanel();
-		panel.add(new JLabel("Start color:"));
-		labelStart = new JLabel("      ");
-		labelStart.setBackground(Color.green);
-		labelStart.setOpaque(true);
-		labelStart.addMouseListener(new LabelMouseListener());
-		panel.add(labelStart);
+		verticalpaJPanel.add(panel);
 
-		panel.add(new JLabel("Stop color:"));
-		labelStop = new JLabel("      ");
-		labelStop.setBackground(Color.red);
-		labelStop.setOpaque(true);
-		labelStop.addMouseListener(new LabelMouseListener());
-		panel.add(labelStop);
-		topPanel.add(panel);
+		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		panel.add(new JLabel("Layout:"));
+
+		ButtonGroup radioGroup = new ButtonGroup();
+		JRadioButton circleRadio = new JRadioButton("Radial tree");
+		radioGroup.add(circleRadio);
+		circleRadio.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				vis.run(RADIAL_TREE_LAYOUT);
+				vis.repaint();
+			}
+		});
+		circleRadio.setSelected(true);
+		panel.add(circleRadio);
+
+		JRadioButton treeRadio = new JRadioButton("Tree");
+		radioGroup.add(treeRadio);
+		treeRadio.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				vis.run(TREE_LAYOUT);
+				vis.repaint();
+			}
+		});
+		panel.add(treeRadio);
+		verticalpaJPanel.add(panel);
+		topPanel.add(verticalpaJPanel);
 
 		frame.add(topPanel, BorderLayout.NORTH);
 
 		frame.add(display, BorderLayout.CENTER);
+		frame
+				.add(
+						new JLabel(
+								"Use the left mouse button to pan and right mouse button to zoom"),
+						BorderLayout.SOUTH);
 		frame.pack(); // layout components in window
 		frame.setVisible(true); // show the window
 
 		vis.run("color"); // assign the colors
-		vis.run("treeLayout"); // start up the tree layout
+		vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
 
 		updateEdges();
 	}
@@ -286,28 +351,16 @@ public class Main {
 		}
 	}
 
-	private class LabelMouseListener implements MouseListener{
+	private class ButtonActionListener implements ActionListener {
 
 		@Override
-		public void mouseClicked(MouseEvent event) {
-			currentLabel = (JLabel) event.getSource();
-			showColorChooser(Color.red);
-		}
-
-		@Override
-		public void mouseEntered(MouseEvent arg0) {
-		}
-
-		@Override
-		public void mouseExited(MouseEvent arg0) {
-		}
-
-		@Override
-		public void mousePressed(MouseEvent arg0) {
-		}
-
-		@Override
-		public void mouseReleased(MouseEvent arg0) {
+		public void actionPerformed(ActionEvent event) {
+			lastSelectedButton = (JButton) event.getSource();
+			if (lastSelectedButton == buttonStart) {
+				showColorChooser(edgeRenderer.getStartColor());
+			} else {
+				showColorChooser(edgeRenderer.getStopColor());
+			}
 		}
 	}
 
@@ -316,8 +369,8 @@ public class Main {
 		@Override
 		public void actionPerformed(ActionEvent arg0) {
 			Color newcolor = chooser.getColor();
-			currentLabel.setBackground(newcolor);
-			if(currentLabel == labelStart){
+			lastSelectedButton.setBackground(newcolor);
+			if (lastSelectedButton == buttonStart) {
 				edgeRenderer.setStartColor(newcolor);
 			} else {
 				edgeRenderer.setStopColor(newcolor);

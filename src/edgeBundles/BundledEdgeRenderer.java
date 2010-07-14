@@ -47,8 +47,16 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 		startColor = newColor;
 	}
 	
+	public Color getStartColor(){
+		return startColor;
+	}
+	
 	public void setStopColor(Color newColor){
 		stopColor = newColor;
+	}
+	
+	public Color getStopColor(){
+		return stopColor;
 	}
 	
 	@Override
