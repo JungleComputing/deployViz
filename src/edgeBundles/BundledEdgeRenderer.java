@@ -23,7 +23,7 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 	private Tree tree;
 	private double bfactor;
 	private boolean removeSharedAncestor;
-	
+
 	private Color startColor, stopColor;
 
 	public BundledEdgeRenderer(int edgeType, Tree tree) {
@@ -43,28 +43,32 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 		removeSharedAncestor = removeSA;
 	}
 
-	public void setStartColor(Color newColor){
+	public void setStartColor(Color newColor) {
 		startColor = newColor;
 	}
-	
-	public Color getStartColor(){
+
+	public Color getStartColor() {
 		return startColor;
 	}
-	
-	public void setStopColor(Color newColor){
+
+	public void setStopColor(Color newColor) {
 		stopColor = newColor;
 	}
-	
-	public Color getStopColor(){
+
+	public Color getStopColor() {
 		return stopColor;
 	}
-	
+
 	@Override
 	public void render(Graphics2D g, VisualItem item) {
 		if (m_edgeType == VizUtils.BSPLINE_EDGE_TYPE) {
 			BSplineEdgeItem edge = (BSplineEdgeItem) item;
-			edge.computeControlPoints(removeSharedAncestor, bfactor,
-					(EdgeItem) item, tree);
+			if(!edge.isUpdated())
+			{
+				edge.computeControlPoints(removeSharedAncestor, bfactor,
+						(EdgeItem) item, tree);
+				edge.setUpdated(true);
+			}
 			drawCubicBSpline(g, (EdgeItem) item);
 		} else {
 			Shape shape = getShape(item);
@@ -185,13 +189,14 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 		float step, ratio = 0;
 		Color color;
 
-		ArrayList<Point2D.Double> controlPoints = ((BSplineEdgeItem) item)
-				.getControlPoints();
+		BSplineEdgeItem bsedge = (BSplineEdgeItem) item;
+
+		ArrayList<Point2D.Double> controlPoints = bsedge.getControlPoints();
 
 		Graphics2D g2d = (Graphics2D) g;
 
-//		g2d.setColor(new Color(0.5f, 0.5f, 0.5f, ((BSplineEdgeItem) item)
-//				.getAlpha()));
+		// g2d.setColor(new Color(0.5f, 0.5f, 0.5f, ((BSplineEdgeItem) item)
+		// .getAlpha()));
 		BasicStroke bs = new BasicStroke(1);
 		g2d.setStroke(bs);
 
@@ -232,7 +237,12 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 
 			color = VizUtils.blend(startColor, stopColor, ratio,
 					((BSplineEdgeItem) item).getAlpha());
-			g.setColor(color);
+
+			if (!bsedge.isSelected()) {
+				g.setColor(color);
+			} else {
+				g.setColor(Color.blue);
+			}
 
 			for (int j = 1; j <= nSteps; j++) {
 
@@ -255,12 +265,14 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 	/**
 	 * Sets the type of the drawn edge. It includes the prefuse edge types and
 	 * BSPLINE in addition
+	 * 
 	 * @param type
 	 *            the new edge type
 	 */
 	@Override
 	public void setEdgeType(int type) {
-		if (type < 0 || (type != VizUtils.BSPLINE_EDGE_TYPE && type >= Constants.EDGE_TYPE_COUNT))
+		if (type < 0
+				|| (type != VizUtils.BSPLINE_EDGE_TYPE && type >= Constants.EDGE_TYPE_COUNT))
 			throw new IllegalArgumentException("Unrecognized edge curve type: "
 					+ type);
 		m_edgeType = type;

@@ -33,6 +33,7 @@ import prefuse.action.ActionList;
 import prefuse.action.assignment.ColorAction;
 import prefuse.action.layout.graph.NodeLinkTreeLayout;
 import prefuse.action.layout.graph.RadialTreeLayout;
+import prefuse.activity.Activity;
 import prefuse.controls.DragControl;
 import prefuse.controls.PanControl;
 import prefuse.controls.ZoomControl;
@@ -123,7 +124,6 @@ public class Main {
 
 		ColorAction nStroke = new ColorAction(NODES, VisualItem.STROKECOLOR);
 		nStroke.setDefaultColor(ColorLib.gray(100));
-		// nStroke.add("_hover", ColorLib.gray(50));
 
 		// ColorAction filling = new ColorAction(NODES, VisualItem.FILLCOLOR,
 		// ColorLib.rgba(200, 200, 255, 150));
@@ -131,15 +131,22 @@ public class Main {
 		// use black for node text
 		ColorAction text = new ColorAction(NODES, VisualItem.TEXTCOLOR,
 				ColorLib.gray(50));
+		
 		// use light grey for edges
-		ColorAction edges = new ColorAction(EDGES, VisualItem.STROKECOLOR,
-				ColorLib.gray(100));
+//		ColorAction edges = new ColorAction(EDGES, VisualItem.STROKECOLOR,
+//				ColorLib.gray(100));
+		
+//		ColorAction fill = new ColorAction(NODES, 
+//                VisualItem.FILLCOLOR, ColorLib.rgb(200,200,255));
+//        fill.add(VisualItem.FIXED, ColorLib.rgb(255,100,100));
+//        fill.add(VisualItem.HIGHLIGHT, ColorLib.rgb(255,200,125));
 
 		// create an action list containing all color assignments
 		ActionList color = new ActionList();
 		color.add(nStroke);
 		color.add(text);
-		color.add(edges);
+		//color.add(edges);
+		//color.add(fill);
 
 		// add the action list to the visualization
 		vis.putAction("color", color);
@@ -165,6 +172,7 @@ public class Main {
 		display.addControlListener(new ZoomControl()); // zoom
 		display.setHighQuality(true);
 		display.setDamageRedraw(false);
+		display.addControlListener(new DisplayControlAdaptor(vis));
 
 		// create a new window to hold the visualization
 		frame = new JFrame("Edge bundles");
@@ -192,6 +200,7 @@ public class Main {
 			@Override
 			public void stateChanged(ChangeEvent arg0) {
 				edgeRenderer.setRemoveSharedAncestor(cbox.isSelected());
+				VizUtils.forceEdgeUpdate(vis);
 				vis.repaint();
 			}
 		});
@@ -233,6 +242,7 @@ public class Main {
 			@Override
 			public void stateChanged(ChangeEvent event) {
 				edgeRenderer.setBundlingFactor(slider.getValue() / 20.0);
+				VizUtils.forceEdgeUpdate(vis);
 				vis.repaint();
 			}
 		});
@@ -251,6 +261,7 @@ public class Main {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				vis.run(RADIAL_TREE_LAYOUT);
+				VizUtils.forceEdgeUpdate(vis);
 				vis.repaint();
 			}
 		});
@@ -264,6 +275,7 @@ public class Main {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				vis.run(TREE_LAYOUT);
+				VizUtils.forceEdgeUpdate(vis);
 				vis.repaint();
 			}
 		});
@@ -279,13 +291,14 @@ public class Main {
 						new JLabel(
 								"Use the left mouse button to pan and right mouse button to zoom"),
 						BorderLayout.SOUTH);
-		frame.pack(); // layout components in window
-		frame.setVisible(true); // show the window
 
 		vis.run("color"); // assign the colors
 		vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
 
-		updateEdges();
+		VizUtils.computeAlphas(vis, tree);
+		
+		frame.pack(); // layout components in window
+		frame.setVisible(true); // show the window
 	}
 
 	private void showColorChooser(Color color) {
@@ -297,17 +310,6 @@ public class Main {
 
 		chooser.setColor(color);
 		colorDialog.setVisible(true);
-	}
-
-	private void updateEdges() {
-		Iterator<EdgeItem> edgeIter = vis.visibleItems(EDGES);
-		BSplineEdgeItem edge;
-		while (edgeIter.hasNext()) {
-			edge = (BSplineEdgeItem) edgeIter.next();
-			edge.computeControlPoints(false, 1, edge, tree);
-		}
-		VizUtils.computeAlphas(vis);
-		vis.repaint();
 	}
 
 	private void assignNodeColours() {

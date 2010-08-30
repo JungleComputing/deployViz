@@ -4,6 +4,8 @@ import java.awt.Color;
 import java.util.Iterator;
 
 import prefuse.Visualization;
+import prefuse.data.Tree;
+import prefuse.util.ColorLib;
 import prefuse.visual.EdgeItem;
 import edgeBundles.BSplineEdgeItem;
 
@@ -18,14 +20,17 @@ public class VizUtils {
 	
 	public static final Color DEFAULT_START_COLOR = Color.green;
 	public static final Color DEFAULT_STOP_COLOR = Color.red;
+	
+	public static final int SELECTED_FILL_COLOR = ColorLib.rgb(0, 0, 255);
+	public static final int SELECTED_TEXT_COLOR = ColorLib.rgb(255, 255, 255);
+	
+	public static final int DEFAULT_TEXT_COLOR =  ColorLib.rgb(0, 0, 0);
 
 	private static final String[] colors = { "#FF0000", "#FF8000", "#80FF00",
-			"#00FF00", "#00FF80", "#00FFFF", "#007FFF", "#0000FF", "#8000FF",
+			"#00FF00", "#00FF80", "#00FFFF", "#007FFF",  "#8000FF",
 			"#FF0080", "#FF8080", "#FFBF80", "#FFFF80", "#BFFF80", "#80FF80",
 			"#80FFBF", "#80FFFF", "#80BFFF", "#8080FF", "#BF80FF", "#FF80FF",
-			"#FF80BF", "#800000", "#804000", "#808000", "#408000", "#008000",
-			"#008040", "#008080", "#004080", "#000080", "#400080", "#800080",
-			"#800040" };
+			"#FF80BF", "#008040", "#008080" };
 
 	private static int colorIndex = 0;
 
@@ -60,13 +65,14 @@ public class VizUtils {
 		return color;
 	}
 
-	public static void computeAlphas(Visualization vis) {
+	public static void computeAlphas(Visualization vis, Tree tree) {
 		Iterator<EdgeItem> edgeIter = vis.visibleItems("graph.edges");
 		BSplineEdgeItem edge;
 		int minlength = Integer.MAX_VALUE, maxlength = Integer.MIN_VALUE, tsize;
 
 		while (edgeIter.hasNext()) {
 			edge = (BSplineEdgeItem) edgeIter.next();
+			edge.computeControlPoints(false, 1, edge, tree);
 			tsize = edge.getControlPoints().size();
 			if (tsize > maxlength) {
 				maxlength = tsize;
@@ -93,4 +99,15 @@ public class VizUtils {
 		return (float) (maxy - (maxy - miny) * (x - minx) / (maxx - minx));
 	}
 
+	public static void forceEdgeUpdate(Visualization vis){
+		Iterator<EdgeItem> edgeIter;
+		BSplineEdgeItem edge;
+		
+		//update all edges - when a node is moved, all edges must be recomputed
+		edgeIter = vis.visibleItems("graph.edges");
+		while(edgeIter.hasNext()){
+			edge = (BSplineEdgeItem) edgeIter.next();
+			edge.setUpdated(false);
+		}
+	}
 }

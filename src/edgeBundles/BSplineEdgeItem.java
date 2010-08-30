@@ -16,6 +16,10 @@ public class BSplineEdgeItem extends TableEdgeItem {
 	private ArrayList<Point2D.Double> controlPoints;
 
 	private float alpha = 1;
+	
+	private boolean selected = false;
+	
+	private boolean edgeUpdated = false;
 
 	public void setControlPoints(ArrayList<Point2D.Double> list) {
 		controlPoints = list;
@@ -33,6 +37,14 @@ public class BSplineEdgeItem extends TableEdgeItem {
 		this.alpha = newAlpha;
 	}
 
+	public boolean isUpdated(){
+		return edgeUpdated;
+	}
+	
+	public void setUpdated(boolean init){
+		edgeUpdated = init;
+	}
+	
 	public void computeControlPoints(boolean removeSharedAncestor,
 			double bundling, EdgeItem edge, Tree tree) {
 		NodeItem source, target, parent1 = null, parent2 = null;
@@ -130,5 +142,13 @@ public class BSplineEdgeItem extends TableEdgeItem {
 		}
 
 		((BSplineEdgeItem) edge).setControlPoints(p);
+	}
+	
+	public boolean isSelected(){
+		return selected;
+	}
+	
+	public void setSelected(boolean sel){
+		selected = sel;
 	}
 }
