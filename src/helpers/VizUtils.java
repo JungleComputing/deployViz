@@ -25,7 +25,7 @@ public class VizUtils {
 	public static final int SELECTED_TEXT_COLOR = ColorLib.rgb(255, 255, 255);
 	
 	public static final int DEFAULT_TEXT_COLOR =  ColorLib.rgb(0, 0, 0);
-
+	
 	private static final String[] colors = { "#FF0000", "#FF8000", "#80FF00",
 			"#00FF00", "#00FF80", "#00FFFF", "#007FFF",  "#8000FF",
 			"#FF0080", "#FF8080", "#FFBF80", "#FFFF80", "#BFFF80", "#80FF80",
@@ -110,4 +110,6 @@ public class VizUtils {
 			edge.setUpdated(false);
 		}
 	}
+
+	public static int MAX_EDGE_WEIGHT = 50;
 }

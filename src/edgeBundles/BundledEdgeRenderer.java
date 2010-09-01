@@ -26,13 +26,24 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 
 	private Color startColor, stopColor;
 
-	public BundledEdgeRenderer(int edgeType, Tree tree) {
+	private boolean colorEncodingWeight = true;
+
+	public BundledEdgeRenderer(int edgeType) {
 		super(edgeType);
-		this.tree = tree;
 		bfactor = VizUtils.INITIAL_BUNDLING_FACTOR;
 		removeSharedAncestor = false;
 		startColor = VizUtils.DEFAULT_START_COLOR;
 		stopColor = VizUtils.DEFAULT_STOP_COLOR;
+	}
+	
+	public void setSpanningTree(Tree tree){
+		this.tree = tree;
+	}
+
+	// the parameter is true if color encoding is used to show weight and false
+	// if it's used to display sender / receiver
+	public void setColorEncoding(boolean ecodingWeight) {
+		colorEncodingWeight = ecodingWeight;
 	}
 
 	public void setBundlingFactor(double bundling) {
@@ -61,10 +72,13 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 
 	@Override
 	public void render(Graphics2D g, VisualItem item) {
+		if(tree == null){
+			throw new RuntimeException("The spanning tree needs to be initialized!");
+		}
+		
 		if (m_edgeType == VizUtils.BSPLINE_EDGE_TYPE) {
 			BSplineEdgeItem edge = (BSplineEdgeItem) item;
-			if(!edge.isUpdated())
-			{
+			if (!edge.isUpdated()) {
 				edge.computeControlPoints(removeSharedAncestor, bfactor,
 						(EdgeItem) item, tree);
 				edge.setUpdated(true);
@@ -137,7 +151,6 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 			shape = m_cubic;
 			break;
 		case VizUtils.BSPLINE_EDGE_TYPE:
-			// computeBSplineControlPoints(false, 1, edge);
 			// see if you can use a different type of curve here TODO
 			getCurveControlPoints(edge, m_ctrlPoints, n1x, n1y, n2x, n2y);
 			m_cubic.setCurve(n1x, n1y, m_ctrlPoints[0].getX(), m_ctrlPoints[0]
@@ -186,12 +199,13 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 		double xA, yA, xB, yB, xC, yC, xD, yD;
 		double a0, a1, a2, a3, b0, b1, b2, b3;
 		double x = 0, y = 0, previousX, previousY;
-		float step, ratio = 0;
+		float step = 0, ratio = 0;
 		Color color;
 
-		BSplineEdgeItem bsedge = (BSplineEdgeItem) item;
+		BSplineEdgeItem bsplineEdge = (BSplineEdgeItem) item;
 
-		ArrayList<Point2D.Double> controlPoints = bsedge.getControlPoints();
+		ArrayList<Point2D.Double> controlPoints = bsplineEdge
+				.getControlPoints();
 
 		Graphics2D g2d = (Graphics2D) g;
 
@@ -200,7 +214,19 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 		BasicStroke bs = new BasicStroke(1);
 		g2d.setStroke(bs);
 
-		step = 1.0f / (controlPoints.size() - 3);
+		if (!bsplineEdge.isSelected()) {
+			if (colorEncodingWeight) {
+				ratio = item.getInt("weight") * 1.0f / VizUtils.MAX_EDGE_WEIGHT;
+				color = VizUtils.blend(startColor, stopColor, ratio,
+						((BSplineEdgeItem) item).getAlpha());
+				g.setColor(color);
+			} else {
+				// color will be computed step by step
+				step = 1.0f / (controlPoints.size() - 3);
+			}
+		} else {
+			g.setColor(Color.blue);
+		}
 
 		for (int i = 1; i < controlPoints.size() - 2; i++) {
 			xA = controlPoints.get(i - 1).getX();
@@ -235,13 +261,17 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 			previousX = a0;
 			previousY = b0;
 
-			color = VizUtils.blend(startColor, stopColor, ratio,
-					((BSplineEdgeItem) item).getAlpha());
+			if (!colorEncodingWeight) {
+				if (!bsplineEdge.isSelected()) {
+					color = VizUtils.blend(startColor, stopColor, ratio,
+							((BSplineEdgeItem) item).getAlpha());
 
-			if (!bsedge.isSelected()) {
-				g.setColor(color);
-			} else {
-				g.setColor(Color.blue);
+					g.setColor(color);
+
+					ratio += step;
+				} else {
+					g.setColor(Color.blue);
+				}
 			}
 
 			for (int j = 1; j <= nSteps; j++) {
@@ -257,8 +287,6 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 				previousX = x;
 				previousY = y;
 			}
-
-			ratio += step;
 		}
 	}
 

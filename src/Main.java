@@ -6,6 +6,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import javax.swing.Box;
@@ -23,6 +24,8 @@ import javax.swing.JSeparator;
 import javax.swing.JSlider;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+
+import dataGenerator.InputDataGenerator;
 
 import edgeBundles.*;
 
@@ -44,10 +47,7 @@ import prefuse.data.io.GraphMLReader;
 import prefuse.data.tuple.TupleSet;
 import prefuse.render.DefaultRendererFactory;
 import prefuse.render.LabelRenderer;
-import prefuse.render.PolygonRenderer;
-import prefuse.render.Renderer;
 import prefuse.util.ColorLib;
-import prefuse.visual.EdgeItem;
 import prefuse.visual.NodeItem;
 import prefuse.visual.VisualItem;
 
@@ -81,25 +81,41 @@ public class Main {
 		visualization.initGUI();
 	}
 
-	public void initGUI() {
+	public void readGraph() {
 		Graph graph = null;
 		try {
+			InputDataGenerator.generateInputFile();
 			graph = new GraphMLReader().readGraph("assets/das3.xml");
+		} catch (IOException e) {
+			System.err.println("Problem geenrating input file");
 		} catch (DataIOException e) {
 			e.printStackTrace();
 			System.err.println("Error loading graph.");
 			System.exit(1);
 		}
 
-		// add the graph to the visualization as the data group "graph"
-		// nodes and edges are accessible as "graph.nodes" and "graph.edges"
-		vis = new BundledEdgeVisualization();
-		vis.add("graph", graph);
+		try {
+			vis.add("graph", graph);
+		} catch (IllegalArgumentException exc) {
+			vis.removeGroup("graph");
+			vis.add("graph", graph);
+		}
+	}
 
+	public void initializeTree() {
 		TupleSet ts = vis.getGroup(GRAPH);
 		if (ts instanceof Graph) {
 			tree = ((Graph) ts).getSpanningTree();
 		}
+	}
+
+	public void initGUI() {
+
+		// add the graph to the visualization as the data group "graph"
+		// nodes and edges are accessible as "graph.nodes" and "graph.edges"
+		vis = new BundledEdgeVisualization();
+
+		readGraph();
 
 		// draw the "name" label for NodeItems
 		LabelRenderer nodeRenderer = new LabelRenderer("name");
@@ -108,11 +124,7 @@ public class Main {
 
 		edgeRenderer = new BundledEdgeRenderer(
 		// Constants.EDGE_TYPE_CURVE, tree);
-				VizUtils.BSPLINE_EDGE_TYPE, tree);
-
-		Renderer aggregateRenderer = new PolygonRenderer(
-				Constants.POLY_TYPE_CURVE);
-		((PolygonRenderer) aggregateRenderer).setCurveSlack(0.15f);
+				VizUtils.BSPLINE_EDGE_TYPE);
 
 		// create a new default renderer factory and initialize it
 		DefaultRendererFactory drf = new DefaultRendererFactory();
@@ -131,22 +143,11 @@ public class Main {
 		// use black for node text
 		ColorAction text = new ColorAction(NODES, VisualItem.TEXTCOLOR,
 				ColorLib.gray(50));
-		
-		// use light grey for edges
-//		ColorAction edges = new ColorAction(EDGES, VisualItem.STROKECOLOR,
-//				ColorLib.gray(100));
-		
-//		ColorAction fill = new ColorAction(NODES, 
-//                VisualItem.FILLCOLOR, ColorLib.rgb(200,200,255));
-//        fill.add(VisualItem.FIXED, ColorLib.rgb(255,100,100));
-//        fill.add(VisualItem.HIGHLIGHT, ColorLib.rgb(255,200,125));
 
 		// create an action list containing all color assignments
 		ActionList color = new ActionList();
 		color.add(nStroke);
 		color.add(text);
-		//color.add(edges);
-		//color.add(fill);
 
 		// add the action list to the visualization
 		vis.putAction("color", color);
@@ -164,7 +165,7 @@ public class Main {
 				Constants.ORIENT_TOP_BOTTOM, 200, 3, 20);
 		vis.putAction(TREE_LAYOUT, treeLayout);
 
-		// create a new Display that pull from our Visualization
+		// create a new Display
 		Display display = new Display(vis);
 		display.setSize(700, 500); // set display size
 		display.addControlListener(new DragControl(true)); // drag items around
@@ -182,6 +183,30 @@ public class Main {
 		BorderLayout lmanager = new BorderLayout();
 		frame.setLayout(lmanager);
 
+		createPanels(frame);
+
+		frame.add(display, BorderLayout.CENTER);
+		frame
+				.add(
+						new JLabel(
+								"Use the left mouse button to pan and right mouse button to zoom"),
+						BorderLayout.SOUTH);
+
+		vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
+		vis.run("color"); // assign the colors
+
+		// give reference to the spanning tree in order to be able to compute
+		// the control points for the edges
+		initializeTree();
+		edgeRenderer.setSpanningTree(tree);
+
+		VizUtils.computeAlphas(vis, tree);
+
+		frame.pack(); // layout components in window
+		frame.setVisible(true); // show the window
+	}
+
+	private void createPanels(JFrame frame) {
 		JPanel topPanel = new JPanel();
 		BoxLayout blayout = new BoxLayout(topPanel, BoxLayout.LINE_AXIS);
 		topPanel.setLayout(blayout);
@@ -225,6 +250,28 @@ public class Main {
 		panel.add(buttonStop);
 
 		verticalpaJPanel.add(panel);
+
+		JButton refreshDataButton = new JButton("Refresh data");
+		refreshDataButton.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				readGraph();
+
+				// assignNodeColours();
+
+				vis.run("color"); // assign the colors
+				vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
+
+				initializeTree();
+				edgeRenderer.setSpanningTree(tree);
+
+				VizUtils.computeAlphas(vis, tree);
+				vis.repaint();
+			}
+		});
+
+		verticalpaJPanel.add(refreshDataButton);
 		topPanel.add(verticalpaJPanel);
 
 		topPanel.add(new JSeparator(JSeparator.VERTICAL));
@@ -260,7 +307,11 @@ public class Main {
 
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
-				vis.run(RADIAL_TREE_LAYOUT);
+				try {
+					vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
+				} catch (ClassCastException exc) {
+					exc.printStackTrace();
+				}
 				VizUtils.forceEdgeUpdate(vis);
 				vis.repaint();
 			}
@@ -281,24 +332,40 @@ public class Main {
 		});
 		panel.add(treeRadio);
 		verticalpaJPanel.add(panel);
+
+		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		panel.add(new JLabel("Edge color encoding:"));
+
+		ButtonGroup colorRadioGroup = new ButtonGroup();
+		JRadioButton weightRadio = new JRadioButton("Edge weight");
+		colorRadioGroup.add(weightRadio);
+		weightRadio.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				edgeRenderer.setColorEncoding(true);
+				vis.repaint();
+			}
+		});
+		weightRadio.setSelected(true);
+		panel.add(weightRadio);
+
+		JRadioButton startEndRadio = new JRadioButton("Start to end node");
+		colorRadioGroup.add(startEndRadio);
+		startEndRadio.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				edgeRenderer.setColorEncoding(false);
+				vis.repaint();
+			}
+		});
+		panel.add(startEndRadio);
+		verticalpaJPanel.add(panel);
+
 		topPanel.add(verticalpaJPanel);
 
 		frame.add(topPanel, BorderLayout.NORTH);
-
-		frame.add(display, BorderLayout.CENTER);
-		frame
-				.add(
-						new JLabel(
-								"Use the left mouse button to pan and right mouse button to zoom"),
-						BorderLayout.SOUTH);
-
-		vis.run("color"); // assign the colors
-		vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
-
-		VizUtils.computeAlphas(vis, tree);
-		
-		frame.pack(); // layout components in window
-		frame.setVisible(true); // show the window
 	}
 
 	private void showColorChooser(Color color) {
