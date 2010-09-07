@@ -8,6 +8,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -41,14 +42,18 @@ import prefuse.controls.DragControl;
 import prefuse.controls.PanControl;
 import prefuse.controls.ZoomControl;
 import prefuse.data.Graph;
+import prefuse.data.Table;
 import prefuse.data.Tree;
 import prefuse.data.io.DataIOException;
 import prefuse.data.io.GraphMLReader;
 import prefuse.data.tuple.TupleSet;
 import prefuse.render.DefaultRendererFactory;
+import prefuse.render.EdgeRenderer;
 import prefuse.render.LabelRenderer;
 import prefuse.util.ColorLib;
+import prefuse.visual.EdgeItem;
 import prefuse.visual.NodeItem;
+import prefuse.visual.VisualGraph;
 import prefuse.visual.VisualItem;
 
 public class Main {
@@ -73,6 +78,8 @@ public class Main {
 	private JButton lastSelectedButton = null, buttonStart = null,
 			buttonStop = null;
 
+	private HashMap<String, Color> nodeColorMap;
+
 	public Main() {
 	}
 
@@ -87,7 +94,7 @@ public class Main {
 			InputDataGenerator.generateInputFile();
 			graph = new GraphMLReader().readGraph("assets/das3.xml");
 		} catch (IOException e) {
-			System.err.println("Problem geenrating input file");
+			System.err.println("Problem generating input file.");
 		} catch (DataIOException e) {
 			e.printStackTrace();
 			System.err.println("Error loading graph.");
@@ -95,18 +102,32 @@ public class Main {
 		}
 
 		try {
-			vis.add("graph", graph);
+			vis.addGraph(GRAPH, graph);
 		} catch (IllegalArgumentException exc) {
-			vis.removeGroup("graph");
-			vis.add("graph", graph);
+
+			vis.removeGroup(GRAPH);
+			vis.add(GRAPH, graph);
 		}
 	}
 
-	public void initializeTree() {
+	public void computeVisualParameters(BundledEdgeRenderer edgeRenderer) {
+		vis.run("color"); // assign the colors
+		vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
+
+		// recompute spanning tree based on the new layout
 		TupleSet ts = vis.getGroup(GRAPH);
 		if (ts instanceof Graph) {
 			tree = ((Graph) ts).getSpanningTree();
 		}
+
+		// pass the new spanning tree reference to the renderer for later use
+		edgeRenderer.setSpanningTree(tree);
+
+		// set the fillColor for the nodes
+		assignNodeColours(tree);
+
+		// compute alphas for the edges, according to their length
+		VizUtils.computeEdgeAlphas(vis, tree);
 	}
 
 	public void initGUI() {
@@ -119,7 +140,6 @@ public class Main {
 
 		// draw the "name" label for NodeItems
 		LabelRenderer nodeRenderer = new LabelRenderer("name");
-		nodeRenderer.setRoundedCorner(8, 8); // round the corners
 		nodeRenderer.setRenderType(LabelRenderer.RENDER_TYPE_DRAW_AND_FILL);
 
 		edgeRenderer = new BundledEdgeRenderer(
@@ -152,10 +172,6 @@ public class Main {
 		// add the action list to the visualization
 		vis.putAction("color", color);
 
-		// set the fillColor for the nodes according to the cluster they belong
-		// to
-		assignNodeColours();
-
 		// create the radial tree layout action
 		RadialTreeLayout radialTreeLayout = new RadialTreeLayout(GRAPH);
 		vis.putAction(RADIAL_TREE_LAYOUT, radialTreeLayout);
@@ -172,7 +188,6 @@ public class Main {
 		display.addControlListener(new PanControl()); // pan
 		display.addControlListener(new ZoomControl()); // zoom
 		display.setHighQuality(true);
-		display.setDamageRedraw(false);
 		display.addControlListener(new DisplayControlAdaptor(vis));
 
 		// create a new window to hold the visualization
@@ -186,21 +201,12 @@ public class Main {
 		createPanels(frame);
 
 		frame.add(display, BorderLayout.CENTER);
-		frame
-				.add(
-						new JLabel(
-								"Use the left mouse button to pan and right mouse button to zoom"),
-						BorderLayout.SOUTH);
-
-		vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
-		vis.run("color"); // assign the colors
+		frame.add(new JLabel("Use the left mouse button to pan "
+				+ "and right mouse button to zoom"), BorderLayout.SOUTH);
 
 		// give reference to the spanning tree in order to be able to compute
 		// the control points for the edges
-		initializeTree();
-		edgeRenderer.setSpanningTree(tree);
-
-		VizUtils.computeAlphas(vis, tree);
+		computeVisualParameters(edgeRenderer);
 
 		frame.pack(); // layout components in window
 		frame.setVisible(true); // show the window
@@ -258,15 +264,7 @@ public class Main {
 			public void actionPerformed(ActionEvent arg0) {
 				readGraph();
 
-				// assignNodeColours();
-
-				vis.run("color"); // assign the colors
-				vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
-
-				initializeTree();
-				edgeRenderer.setSpanningTree(tree);
-
-				VizUtils.computeAlphas(vis, tree);
+				computeVisualParameters(edgeRenderer);
 				vis.repaint();
 			}
 		});
@@ -379,13 +377,16 @@ public class Main {
 		colorDialog.setVisible(true);
 	}
 
-	private void assignNodeColours() {
-		NodeItem item, parent;
+	private void assignNodeColours(Tree tree) {
+		NodeItem item, parent = null;
 
 		String nextColor;
 		Color color;
 
 		ArrayList<VisualItem> mainNodes = new ArrayList<VisualItem>();
+		if (nodeColorMap == null) {
+			nodeColorMap = new HashMap<String, Color>();
+		}
 
 		// add nodes to aggregates
 		Iterator<NodeItem> nodes = vis.visibleItems(NODES);
@@ -395,19 +396,29 @@ public class Main {
 			if (item.getString("type").equals(VizUtils.HEAD_NODE)) {
 				if (!mainNodes.contains(item)) {
 					mainNodes.add(item);
-					nextColor = VizUtils.getRandomColor();
-					color = Color.decode(nextColor).brighter();
+					if (!nodeColorMap.containsKey(item.getString("name"))) {
+						nextColor = VizUtils.getRandomColor();
+						color = Color.decode(nextColor).brighter();
+						nodeColorMap.put(item.getString("name"), color);
+					} else {
+						color = nodeColorMap.get(item.getString("name"));
+					}
 					item.setFillColor(ColorLib.color(color));
 				}
 			} else {
-				parent = (NodeItem) item.getParent();
+				parent = (NodeItem) tree.getParent((NodeItem) item);
 				if (parent != null
 						&& parent.getString("type").equals(VizUtils.HEAD_NODE)) {
 					int idx = mainNodes.indexOf(parent);
 					if (idx < 0) { // the parent is not in the list
 						mainNodes.add(parent);
-						nextColor = VizUtils.getRandomColor();
-						color = Color.decode(nextColor).brighter();
+						if (!nodeColorMap.containsKey(item.getString("name"))) {
+							nextColor = VizUtils.getRandomColor();
+							color = Color.decode(nextColor).brighter();
+							nodeColorMap.put(item.getString("name"), color);
+						} else {
+							color = nodeColorMap.get(item.getString("name"));
+						}
 						item.setFillColor(ColorLib.color(color));
 					}
 					item.setFillColor(parent.getFillColor());

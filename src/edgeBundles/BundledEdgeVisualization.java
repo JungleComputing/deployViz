@@ -1,18 +1,15 @@
 package edgeBundles;
-import java.util.Iterator;
-
 
 import prefuse.Visualization;
 import prefuse.data.Graph;
 import prefuse.data.Schema;
+import prefuse.data.Table;
 import prefuse.data.expression.Predicate;
 import prefuse.data.tuple.TupleManager;
 import prefuse.util.PrefuseLib;
 import prefuse.visual.VisualGraph;
 import prefuse.visual.VisualItem;
 import prefuse.visual.VisualTable;
-import prefuse.visual.expression.ValidatedPredicate;
-import prefuse.visual.tuple.TableEdgeItem;
 import prefuse.visual.tuple.TableNodeItem;
 
 //altered visualization -> to customize the edge items
@@ -46,5 +43,26 @@ public class BundledEdgeVisualization extends Visualization{
         vg.setTupleManagers(ntm, etm);
         
         return vg;
+    }
+    
+    public synchronized void refreshEdges(VisualGraph visualGraph, Table edges){
+    	
+    	VisualTable  et = addTable("graph.edges", edges, null, VisualItem.SCHEMA);
+    	TupleManager etm = new TupleManager(et, visualGraph, BSplineEdgeItem.class);
+    	et.setTupleManager(etm);
+    	//visualGraph.setTupleManagers(visualGraph.getNodes(), etm) 
+
+    }
+    
+    @Override 
+    public synchronized VisualTable addTable(
+            String group, Table table, Predicate filter)
+    {
+    	VisualTable vt = new VisualTable(table, this, group, filter);
+    	
+    	TupleManager edgeTupleManager = new TupleManager(vt, (VisualGraph)getGroup("graph"), BSplineEdgeItem.class);
+    	vt.setTupleManager(edgeTupleManager);
+    	addDataGroup(group, vt, table);
+        return vt;
     }
 }

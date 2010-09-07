@@ -65,7 +65,7 @@ public class VizUtils {
 		return color;
 	}
 
-	public static void computeAlphas(Visualization vis, Tree tree) {
+	public static void computeEdgeAlphas(Visualization vis, Tree tree) {
 		Iterator<EdgeItem> edgeIter = vis.visibleItems("graph.edges");
 		BSplineEdgeItem edge;
 		int minlength = Integer.MAX_VALUE, maxlength = Integer.MIN_VALUE, tsize;
