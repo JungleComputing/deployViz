@@ -44,25 +44,4 @@ public class BundledEdgeVisualization extends Visualization{
         
         return vg;
     }
-    
-    public synchronized void refreshEdges(VisualGraph visualGraph, Table edges){
-    	
-    	VisualTable  et = addTable("graph.edges", edges, null, VisualItem.SCHEMA);
-    	TupleManager etm = new TupleManager(et, visualGraph, BSplineEdgeItem.class);
-    	et.setTupleManager(etm);
-    	//visualGraph.setTupleManagers(visualGraph.getNodes(), etm) 
-
-    }
-    
-    @Override 
-    public synchronized VisualTable addTable(
-            String group, Table table, Predicate filter)
-    {
-    	VisualTable vt = new VisualTable(table, this, group, filter);
-    	
-    	TupleManager edgeTupleManager = new TupleManager(vt, (VisualGraph)getGroup("graph"), BSplineEdgeItem.class);
-    	vt.setTupleManager(edgeTupleManager);
-    	addDataGroup(group, vt, table);
-        return vt;
-    }
 }

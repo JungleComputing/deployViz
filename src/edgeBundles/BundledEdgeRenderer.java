@@ -2,8 +2,10 @@ package edgeBundles;
 
 import helpers.VizUtils;
 
+import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Shape;
@@ -16,7 +18,6 @@ import prefuse.data.Tree;
 import prefuse.render.EdgeRenderer;
 import prefuse.util.GraphicsLib;
 import prefuse.visual.EdgeItem;
-import prefuse.visual.NodeItem;
 import prefuse.visual.VisualItem;
 
 public class BundledEdgeRenderer extends EdgeRenderer {
@@ -35,8 +36,8 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 		startColor = VizUtils.DEFAULT_START_COLOR;
 		stopColor = VizUtils.DEFAULT_STOP_COLOR;
 	}
-	
-	public void setSpanningTree(Tree tree){
+
+	public void setSpanningTree(Tree tree) {
 		this.tree = tree;
 	}
 
@@ -72,10 +73,11 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 
 	@Override
 	public void render(Graphics2D g, VisualItem item) {
-		if(tree == null){
-			throw new RuntimeException("The spanning tree needs to be initialized!");
+		if (tree == null) {
+			throw new RuntimeException(
+					"The spanning tree needs to be initialized!");
 		}
-		
+
 		if (m_edgeType == VizUtils.BSPLINE_EDGE_TYPE) {
 			BSplineEdgeItem edge = (BSplineEdgeItem) item;
 			if (!edge.isUpdated()) {
@@ -166,33 +168,6 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 		return shape;
 	}
 
-	@Override
-	public void setBounds(VisualItem item) {
-		// if (!m_manageBounds)
-		// return;
-		// if (m_edgeType == BSPLINE) {
-		// Rectangle2D.Double r = new Rectangle2D.Double();
-		// ArrayList<Point2D.Double> controlPoints = ((BSplineEdgeItem) item)
-		// .getControlPoints();
-		// if (controlPoints != null) {
-		// for (int i = 0; i < controlPoints.size(); i++) {
-		// r.add(controlPoints.get(i));
-		// }
-		// GraphicsLib.setBounds(item, r, getStroke(item));
-		// if ( m_curArrow != null ) {
-		// Rectangle2D bbox = (Rectangle2D)item.get(VisualItem.BOUNDS);
-		// Rectangle2D.union(bbox, m_curArrow.getBounds2D(), bbox);
-		// }
-		// } else {
-		// item.setBounds(item.getX(), item.getY(), 0, 0);
-		// }
-		// } else {
-		// super.setBounds(item);
-		// }
-
-		super.setBounds(item);
-	}
-
 	// draw uniform cubic B-spline
 	void drawCubicBSpline(Graphics g, EdgeItem item) {
 		int nSteps = 10;
@@ -209,8 +184,8 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 
 		Graphics2D g2d = (Graphics2D) g;
 
-		// g2d.setColor(new Color(0.5f, 0.5f, 0.5f, ((BSplineEdgeItem) item)
-		// .getAlpha()));
+		 g2d.setColor(new Color(0.5f, 0.5f, 0.5f, ((BSplineEdgeItem) item)
+		 .getAlpha()));
 		BasicStroke bs = new BasicStroke(1);
 		g2d.setStroke(bs);
 
@@ -273,21 +248,40 @@ public class BundledEdgeRenderer extends EdgeRenderer {
 					g.setColor(Color.blue);
 				}
 			}
+			
+			double t = 0, slope, intercept;
 
 			for (int j = 1; j <= nSteps; j++) {
-
-				double t = (double) j / (double) nSteps;
+				
+				t = (double) j / (double) nSteps;
+				
+				
 				x = (a3 * t * t + a2 * t + a1) * t + a0;
 				y = (b3 * t * t + b2 * t + b1) * t + b0;
 
 				g2d
 						.drawLine((int) previousX, (int) previousY, (int) x,
 								(int) y);
+				// Color oldcolor = g2d.getColor();
+				// g2d.setColor(Color.white);
+				// g2d.drawLine((int)previousX, (int)previousY, (int)previousX,
+				// (int)previousY);
+				// g2d.setColor(oldcolor);
+				// g2d.drawLine((int)previousX, (int)previousY, (int)previousX,
+				// (int)previousY);
 
 				previousX = x;
 				previousY = y;
 			}
 		}
+	}
+	
+	private double getSlope(double x1, double y1, double x2, double y2){
+		return (y2-y1) / (x2-x1);
+	}
+	
+	private double getIntercept(double x1, double y1, double x2, double y2){
+		return y1 - getSlope(x1, y1, x2, y2)*x1;
 	}
 
 	/**

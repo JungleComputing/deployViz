@@ -27,7 +27,6 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 import dataGenerator.InputDataGenerator;
-
 import edgeBundles.*;
 
 import prefuse.Constants;
@@ -37,23 +36,18 @@ import prefuse.action.ActionList;
 import prefuse.action.assignment.ColorAction;
 import prefuse.action.layout.graph.NodeLinkTreeLayout;
 import prefuse.action.layout.graph.RadialTreeLayout;
-import prefuse.activity.Activity;
 import prefuse.controls.DragControl;
 import prefuse.controls.PanControl;
 import prefuse.controls.ZoomControl;
 import prefuse.data.Graph;
-import prefuse.data.Table;
 import prefuse.data.Tree;
 import prefuse.data.io.DataIOException;
 import prefuse.data.io.GraphMLReader;
 import prefuse.data.tuple.TupleSet;
 import prefuse.render.DefaultRendererFactory;
-import prefuse.render.EdgeRenderer;
 import prefuse.render.LabelRenderer;
 import prefuse.util.ColorLib;
-import prefuse.visual.EdgeItem;
 import prefuse.visual.NodeItem;
-import prefuse.visual.VisualGraph;
 import prefuse.visual.VisualItem;
 
 public class Main {
@@ -188,6 +182,7 @@ public class Main {
 		display.addControlListener(new PanControl()); // pan
 		display.addControlListener(new ZoomControl()); // zoom
 		display.setHighQuality(true);
+		display.setDamageRedraw(false);
 		display.addControlListener(new DisplayControlAdaptor(vis));
 
 		// create a new window to hold the visualization
