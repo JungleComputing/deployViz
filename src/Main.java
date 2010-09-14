@@ -10,6 +10,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import javax.swing.Timer;
+
+import javax.swing.AbstractAction;
+import javax.swing.Action;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
@@ -36,6 +40,7 @@ import prefuse.action.ActionList;
 import prefuse.action.assignment.ColorAction;
 import prefuse.action.layout.graph.NodeLinkTreeLayout;
 import prefuse.action.layout.graph.RadialTreeLayout;
+import prefuse.action.layout.graph.TreeLayout;
 import prefuse.controls.DragControl;
 import prefuse.controls.PanControl;
 import prefuse.controls.ZoomControl;
@@ -59,6 +64,8 @@ public class Main {
 	public static final String NODES = "graph.nodes";
 	public static final String EDGES = "graph.edges";
 	public static final String AGGR = "aggregates";
+	public static final String NODE_NAME = "name";
+	public static final String NODE_TYPE = "type";
 
 	public static final String TREE_LAYOUT = "treeLayout";
 	public static final String RADIAL_TREE_LAYOUT = "radialTreeLayout";
@@ -74,6 +81,13 @@ public class Main {
 
 	private HashMap<String, Color> nodeColorMap;
 
+	private Timer simulationTimer;
+	private Action updateVisualizationAction;
+
+	private TreeLayout lastSelectedLayout = null;
+	private RadialTreeLayout radialTreeLayout;
+	private NodeLinkTreeLayout treeLayout;
+
 	public Main() {
 	}
 
@@ -82,6 +96,7 @@ public class Main {
 		visualization.initGUI();
 	}
 
+	// reads the graph from a GraphML file and loads it into the visualization
 	public void readGraph() {
 		Graph graph = null;
 		try {
@@ -99,14 +114,26 @@ public class Main {
 			vis.addGraph(GRAPH, graph);
 		} catch (IllegalArgumentException exc) {
 
+			// an exception will be thrown when the GRAPH group already exists
+			// in the visualization. In this case, remove the existing data
+			// before adding new information
+
+			vis.removeGroup(EDGES);
+			vis.removeGroup(NODES);
 			vis.removeGroup(GRAPH);
 			vis.add(GRAPH, graph);
 		}
 	}
 
+	// redoes the layout and assigns edge colors and alphas.
+	// It is called during the simulation when new data is loaded
 	public void computeVisualParameters(BundledEdgeRenderer edgeRenderer) {
 		vis.run("color"); // assign the colors
-		vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
+		if (lastSelectedLayout == radialTreeLayout) {
+			vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
+		} else {
+			vis.run(TREE_LAYOUT);
+		}
 
 		// recompute spanning tree based on the new layout
 		TupleSet ts = vis.getGroup(GRAPH);
@@ -126,16 +153,16 @@ public class Main {
 
 	public void initGUI() {
 
-		// add the graph to the visualization as the data group "graph"
-		// nodes and edges are accessible as "graph.nodes" and "graph.edges"
 		vis = new BundledEdgeVisualization();
 
+		// read the graph data and add it to the visualization
 		readGraph();
 
 		// draw the "name" label for NodeItems
-		LabelRenderer nodeRenderer = new LabelRenderer("name");
+		LabelRenderer nodeRenderer = new LabelRenderer(NODE_NAME);
 		nodeRenderer.setRenderType(LabelRenderer.RENDER_TYPE_DRAW_AND_FILL);
 
+		// use custom edge renderer to draw curved edges
 		edgeRenderer = new BundledEdgeRenderer(
 		// Constants.EDGE_TYPE_CURVE, tree);
 				VizUtils.BSPLINE_EDGE_TYPE);
@@ -148,11 +175,9 @@ public class Main {
 		// add the renderer factory to the visualization
 		vis.setRendererFactory(drf);
 
+		// create stroke for drawing nodes
 		ColorAction nStroke = new ColorAction(NODES, VisualItem.STROKECOLOR);
 		nStroke.setDefaultColor(ColorLib.gray(100));
-
-		// ColorAction filling = new ColorAction(NODES, VisualItem.FILLCOLOR,
-		// ColorLib.rgba(200, 200, 255, 150));
 
 		// use black for node text
 		ColorAction text = new ColorAction(NODES, VisualItem.TEXTCOLOR,
@@ -167,12 +192,13 @@ public class Main {
 		vis.putAction("color", color);
 
 		// create the radial tree layout action
-		RadialTreeLayout radialTreeLayout = new RadialTreeLayout(GRAPH);
+		radialTreeLayout = new RadialTreeLayout(GRAPH);
 		vis.putAction(RADIAL_TREE_LAYOUT, radialTreeLayout);
+		lastSelectedLayout = radialTreeLayout;
 
 		// create the tree layout action
-		NodeLinkTreeLayout treeLayout = new NodeLinkTreeLayout(GRAPH,
-				Constants.ORIENT_TOP_BOTTOM, 200, 3, 20);
+		treeLayout = new NodeLinkTreeLayout(GRAPH, Constants.ORIENT_TOP_BOTTOM,
+				200, 3, 20);
 		vis.putAction(TREE_LAYOUT, treeLayout);
 
 		// create a new Display
@@ -193,31 +219,52 @@ public class Main {
 		BorderLayout lmanager = new BorderLayout();
 		frame.setLayout(lmanager);
 
+		// create the panels together with the controls
 		createPanels(frame);
 
 		frame.add(display, BorderLayout.CENTER);
 		frame.add(new JLabel("Use the left mouse button to pan "
 				+ "and right mouse button to zoom"), BorderLayout.SOUTH);
 
-		// give reference to the spanning tree in order to be able to compute
-		// the control points for the edges
 		computeVisualParameters(edgeRenderer);
 
 		frame.pack(); // layout components in window
 		frame.setVisible(true); // show the window
+
+		// create an Action element that is triggered during simulation
+		updateVisualizationAction = new AbstractAction() {
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				readGraph();
+				computeVisualParameters(edgeRenderer);
+				vis.repaint();
+			}
+
+		};
+
+		// create the timer that will trigger the data refresh
+		// during the simulation
+		simulationTimer = new Timer(500, updateVisualizationAction);
 	}
 
+	// creates the panels and the controls that are used to customize the
+	// visualization
 	private void createPanels(JFrame frame) {
+
 		JPanel topPanel = new JPanel();
 		BoxLayout blayout = new BoxLayout(topPanel, BoxLayout.LINE_AXIS);
 		topPanel.setLayout(blayout);
 		topPanel.add(Box.createRigidArea(new Dimension(30, 30)));
 
+		// initialize left panel
 		JPanel verticalpaJPanel = new JPanel();
 		BoxLayout verticalLayout = new BoxLayout(verticalpaJPanel,
 				BoxLayout.PAGE_AXIS);
 		verticalpaJPanel.setLayout(verticalLayout);
 
+		// checkbox to add / remove shared ancestor
 		JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		panel.add(new JLabel("Remove shared ancestor:"));
 		cbox = new JCheckBox();
@@ -233,6 +280,7 @@ public class Main {
 		panel.add(cbox);
 		verticalpaJPanel.add(panel);
 
+		// color picker for edge start color
 		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		panel.add(new JLabel("Start color:"));
 		buttonStart = new JButton("  ");
@@ -242,6 +290,7 @@ public class Main {
 		buttonStart.setToolTipText("Click to select color");
 		panel.add(buttonStart);
 
+		// color picker for edge stop color
 		panel.add(new JLabel("Stop color:"));
 		buttonStop = new JButton("  ");
 		buttonStop.setBackground(VizUtils.DEFAULT_STOP_COLOR);
@@ -252,27 +301,37 @@ public class Main {
 
 		verticalpaJPanel.add(panel);
 
-		JButton refreshDataButton = new JButton("Refresh data");
+		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		// button for managing simulation
+		final JButton refreshDataButton = new JButton("Start simulation");
 		refreshDataButton.addActionListener(new ActionListener() {
 
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
-				readGraph();
-
-				computeVisualParameters(edgeRenderer);
-				vis.repaint();
+				if (simulationTimer.isRunning()) {
+					simulationTimer.stop();
+					refreshDataButton.setText("Start simulation");
+				} else {
+					simulationTimer.start();
+					refreshDataButton.setText("Stop simulation");
+				}
 			}
 		});
 
-		verticalpaJPanel.add(refreshDataButton);
+		panel.add(refreshDataButton);
+		verticalpaJPanel.add(panel);
+
+		// the left panel is initialized, so add it to the main panel
 		topPanel.add(verticalpaJPanel);
 
 		topPanel.add(new JSeparator(JSeparator.VERTICAL));
 
+		// initialize right panel
 		verticalpaJPanel = new JPanel();
 		verticalLayout = new BoxLayout(verticalpaJPanel, BoxLayout.PAGE_AXIS);
 		verticalpaJPanel.setLayout(verticalLayout);
 
+		// slider for changing the bundling factor
 		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		panel.add(new JLabel("Change bundling factor:"));
 		slider = new JSlider(0, 20,
@@ -293,6 +352,7 @@ public class Main {
 		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		panel.add(new JLabel("Layout:"));
 
+		// radio buttons for switching between layouts
 		ButtonGroup radioGroup = new ButtonGroup();
 		JRadioButton circleRadio = new JRadioButton("Radial tree");
 		radioGroup.add(circleRadio);
@@ -302,6 +362,7 @@ public class Main {
 			public void actionPerformed(ActionEvent arg0) {
 				try {
 					vis.run(RADIAL_TREE_LAYOUT); // start up the tree layout
+					lastSelectedLayout = radialTreeLayout;
 				} catch (ClassCastException exc) {
 					exc.printStackTrace();
 				}
@@ -319,6 +380,7 @@ public class Main {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				vis.run(TREE_LAYOUT);
+				lastSelectedLayout = treeLayout;
 				VizUtils.forceEdgeUpdate(vis);
 				vis.repaint();
 			}
@@ -326,6 +388,8 @@ public class Main {
 		panel.add(treeRadio);
 		verticalpaJPanel.add(panel);
 
+		// radio buttons for switching between edge color encoding methods:
+		// based on edge weight or based on start and end nodes
 		panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		panel.add(new JLabel("Edge color encoding:"));
 
@@ -361,6 +425,7 @@ public class Main {
 		frame.add(topPanel, BorderLayout.NORTH);
 	}
 
+	// displays the color chooser
 	private void showColorChooser(Color color) {
 		if (chooser == null && colorDialog == null) {
 			chooser = new JColorChooser();
@@ -372,6 +437,9 @@ public class Main {
 		colorDialog.setVisible(true);
 	}
 
+	// assigns node colors based on the cluster they are in.
+	// At the moment, the colors are picked at random from a list of available
+	// colors
 	private void assignNodeColours(Tree tree) {
 		NodeItem item, parent = null;
 
@@ -388,31 +456,45 @@ public class Main {
 
 		while (nodes.hasNext()) {
 			item = nodes.next();
-			if (item.getString("type").equals(VizUtils.HEAD_NODE)) {
+
+			// pick the color at random if it's a head node
+			if (item.getString(NODE_TYPE).equals(VizUtils.HEAD_NODE)) {
 				if (!mainNodes.contains(item)) {
 					mainNodes.add(item);
-					if (!nodeColorMap.containsKey(item.getString("name"))) {
+
+					// check if the node already had a color assigned to it or
+					// not
+					if (!nodeColorMap.containsKey(item.getString(NODE_NAME))) {
 						nextColor = VizUtils.getRandomColor();
 						color = Color.decode(nextColor).brighter();
-						nodeColorMap.put(item.getString("name"), color);
+						nodeColorMap.put(item.getString(NODE_NAME), color);
 					} else {
-						color = nodeColorMap.get(item.getString("name"));
+						// just use the existing color
+						color = nodeColorMap.get(item.getString(NODE_NAME));
 					}
 					item.setFillColor(ColorLib.color(color));
 				}
 			} else {
+				// in the case of compute nodes, look at the color of the parent
+				// first
 				parent = (NodeItem) tree.getParent((NodeItem) item);
+
+				// if the parent is defined and has a color assigned, use this
+				// color
 				if (parent != null
-						&& parent.getString("type").equals(VizUtils.HEAD_NODE)) {
+						&& parent.getString(NODE_TYPE).equals(
+								VizUtils.HEAD_NODE)) {
+
 					int idx = mainNodes.indexOf(parent);
 					if (idx < 0) { // the parent is not in the list
 						mainNodes.add(parent);
-						if (!nodeColorMap.containsKey(item.getString("name"))) {
+						if (!nodeColorMap
+								.containsKey(item.getString(NODE_NAME))) {
 							nextColor = VizUtils.getRandomColor();
 							color = Color.decode(nextColor).brighter();
-							nodeColorMap.put(item.getString("name"), color);
+							nodeColorMap.put(item.getString(NODE_NAME), color);
 						} else {
-							color = nodeColorMap.get(item.getString("name"));
+							color = nodeColorMap.get(item.getString(NODE_NAME));
 						}
 						item.setFillColor(ColorLib.color(color));
 					}
@@ -426,6 +508,7 @@ public class Main {
 		}
 	}
 
+	// action listener for the color choosing button
 	private class ButtonActionListener implements ActionListener {
 
 		@Override
@@ -439,6 +522,7 @@ public class Main {
 		}
 	}
 
+	// action listener the color chooser dialog
 	private class DialogActionlistener implements ActionListener {
 
 		@Override
